@@ -27,7 +27,7 @@ logging.basicConfig(
 
 def init_webdriver():
 
-    logging.info(f'Installin chrome driver, v{DRIVER_V}')
+    logging.info(f'Installing chrome driver, v{DRIVER_V}')
 
     driver = webdriver.Chrome(
         service=Service(ChromeDriverManager(
@@ -45,8 +45,9 @@ def init_webdriver():
 def bfs(driver):
     """
     This function use the Breadth first search algorithm to search for the shortest path 
-    to the coinbase.
-    """    
+    to the coinbase. V1
+    """  
+
     logging.info('Running the BFS flow to find the shortest path to coinbase')
     
     queue_to_explore = deque([(LAST_TXID, [])])
@@ -66,12 +67,87 @@ def bfs(driver):
         
         descendant_txids, initial_link = validate_input_transactions(driver, all_descendant_txids)
         
+        # OLD LOOP
+        # for descendant in descendant_txids:
+        #     if descendant['txid'] not in input_txids_explored:
+        #         leading_txids.append(curr_txid)
+        #         queue_to_explore.append((descendant['txid'], leading_txids))
+
         for descendant in descendant_txids:
             if descendant['txid'] not in input_txids_explored:
-                leading_txids.append(curr_txid)
-                queue_to_explore.append((descendant['txid'], leading_txids))
+                leading_txids_descendant = leading_txids.copy()
+                leading_txids_descendant.append(descendant['txid'])
+                queue_to_explore.append((descendant['txid'], leading_txids_descendant))
+
         driver.get(initial_link)
         driver.implicitly_wait(10)
+
+
+def bfs_2(driver):
+    """
+    This function use the Breadth first search algorithm to search for the shortest path 
+    to the coinbase. V2
+    """  
+    
+    input_txids_explored = set()
+    queue_to_explore = deque([(LAST_TXID, [])])
+    
+    while queue_to_explore:
+        curr_txid, leading_txids = queue_to_explore.popleft()
+        logging.debug(f'Current txid: {curr_txid}')
+
+        contains_coinbase, coinbase_txid, all_descendant_txids =\
+            check_if_current_txid_contains_coinbase(driver, curr_txid)
+        if contains_coinbase:
+            leading_txids.append(curr_txid)
+            filtered_txid_list = set(leading_txids)
+            return filtered_txid_list, coinbase_txid
+        
+        descendant_txids, initial_link = validate_input_transactions(driver, all_descendant_txids)
+        
+        for descendant in descendant_txids:
+            descendant_txid = descendant['txid']
+            if descendant_txid not in queue_to_explore:
+                queue_to_explore.append((descendant_txid, leading_txids + [curr_txid]))
+
+        input_txids_explored.add(curr_txid)
+        driver.get(initial_link)
+        driver.implicitly_wait(10)
+
+
+def bfs_3(driver):
+    """
+    This function use the Breadth first search algorithm to search for the shortest path 
+    to the coinbase. V3
+    """    
+    logging.info('Running the BFS flow to find the shortest path to coinbase')
+    
+    queue_to_explore = deque([(LAST_TXID, [])])
+    input_txids_explored = set()
+    paths_to_txid = {LAST_TXID: []}
+
+    while queue_to_explore:
+        curr_txid, leading_txids = queue_to_explore.popleft()
+        logging.debug(f'Current txid: {curr_txid}')
+
+        contains_coinbase, coinbase_txid, all_descendant_txids =\
+            check_if_current_txid_contains_coinbase(driver, curr_txid)
+        if contains_coinbase:
+            leading_txids.append(curr_txid)
+            filtered_txid_list = set(leading_txids)
+            return filtered_txid_list, coinbase_txid
+
+        descendant_txids, initial_link = validate_input_transactions(driver, all_descendant_txids)
+
+        for descendant in descendant_txids:
+            descendant_txid = descendant['txid']
+            if descendant_txid not in input_txids_explored:
+                input_txids_explored.add(descendant_txid)
+                paths_to_txid[descendant_txid] = leading_txids + [curr_txid]
+                queue_to_explore.append((descendant_txid, paths_to_txid[descendant_txid]))
+
+        driver.get(initial_link)
+        driver.implicitly_wait(10) 
 
 
 def check_if_current_txid_contains_coinbase(driver, curr_txid):
